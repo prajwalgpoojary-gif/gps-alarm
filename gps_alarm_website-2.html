@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GPS Alarm</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+:root{--navy:#101b35;--blue:#3867f5;--ink:#18233b;--muted:#69758d;--line:#e5eaf3;--bg:#f4f7fc;--green:#16865b}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:var(--ink)}
+button,input{font:inherit}button{cursor:pointer;border:0;border-radius:12px;padding:13px 17px;font-weight:700}
+.primary{background:var(--blue);color:#fff}.secondary{background:#edf1ff;color:#294fc8}.danger{background:#fff0f0;color:#b72f39}
+.screen{min-height:100vh;display:grid;place-items:center;padding:22px}.welcome{width:min(480px,100%);background:white;border:1px solid var(--line);border-radius:26px;padding:32px;box-shadow:0 18px 55px #17264a12}
+.logo{width:58px;height:58px;border-radius:18px;background:#eaf0ff;display:grid;place-items:center;font-size:29px;margin-bottom:22px}
+h1{font-size:32px;margin:0 0 8px;letter-spacing:-1px}.sub{color:var(--muted);line-height:1.55;margin:0 0 26px}
+label{display:block;font-weight:700;font-size:14px;margin:18px 0 8px}
+input{width:100%;border:1px solid #d9e0ed;border-radius:12px;padding:14px;background:#fff;color:var(--ink);outline:none}
+input:focus{border-color:var(--blue);box-shadow:0 0 0 3px #3867f51a}
+.unit{position:relative}.unit span{position:absolute;right:14px;top:14px;color:var(--muted);font-size:14px}
+.full{width:100%;margin-top:22px}.note{font-size:12px;color:var(--muted);line-height:1.5;margin-top:16px}
+#app{display:none;min-height:100vh}.topbar{background:var(--navy);color:#fff;padding:17px 22px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{font-weight:800;font-size:19px;display:flex;align-items:center;gap:10px}.brand span{font-size:22px}
+.pill{font-size:12px;background:#263655;color:#dce5ff;padding:7px 10px;border-radius:30px}
+.layout{max-width:1200px;margin:22px auto;padding:0 18px;display:grid;grid-template-columns:360px 1fr;gap:18px}
+.panel,.mapbox{background:#fff;border:1px solid var(--line);border-radius:20px;box-shadow:0 8px 30px #17264a08}
+.panel{padding:20px}.panel h2{font-size:19px;margin:0 0 5px}.muted{color:var(--muted);font-size:13px;line-height:1.45}
+.searchrow{display:flex;gap:8px}.searchrow input{min-width:0}.searchrow button{padding:0 14px}
+.status{padding:12px;border-radius:13px;background:#f1f5ff;margin:16px 0;font-size:13px;line-height:1.45}
+.status strong{display:block;margin-bottom:3px}.dot{display:inline-block;width:8px;height:8px;background:#e0a12d;border-radius:50%;margin-right:6px}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.actions button{flex:1}
+#map{height:calc(100vh - 145px);min-height:480px;border-radius:20px}
+.mapbox{padding:8px}.maphint{padding:8px 10px;color:var(--muted);font-size:12px}
+.result{padding:10px;border:1px solid var(--line);border-radius:10px;margin-top:8px;cursor:pointer;font-size:13px}.result:hover{background:#f4f7ff}
+.small{font-size:12px;color:var(--muted);margin-top:10px}.hidden{display:none!important}
+@media(max-width:800px){.layout{grid-template-columns:1fr}.mapbox{order:2}#map{height:52vh;min-height:350px}.topbar{padding:14px 16px}.layout{margin:14px auto}}
+</style>
+</head>
+<body>
+<section class="screen" id="welcome">
+ <div class="welcome">
+  <div class="logo">📍</div>
+  <h1>GPS Alarm</h1>
+  <p class="sub">Reach your destination without constantly checking the map. Choose how close you want to be before the alarm activates.</p>
+  <label for="radius">Alarm activation distance</label>
+  <div class="unit"><input id="radius" type="number" min="25" max="5000" step="25" value="250"><span>metres</span></div>
+  <button class="primary full" id="start">Set up my GPS alarm →</button>
+  <p class="note">Your starting point will be taken automatically from your phone's current GPS/location permission. Location access works on HTTPS or localhost.</p>
+ </div>
+</section>
+
+<div id="app">
+ <header class="topbar"><div class="brand"><span>📍</span> GPS Alarm</div><div class="pill" id="topStatus">Waiting for location</div></header>
+ <main class="layout">
+  <section class="panel">
+   <h2>Set your destination</h2>
+   <p class="muted">Your current phone location is used as the starting point and updated as you move.</p>
+   <label for="destination">Destination point</label>
+   <div class="searchrow"><input id="destination" placeholder="Search a place or address"><button class="primary" id="search">Find</button></div>
+   <div id="results"></div>
+   <div class="status" id="gpsStatus"><strong><span class="dot"></span>Waiting for GPS permission</strong>Allow location access when your browser asks.</div>
+   <div class="status"><strong>Alarm range</strong><span id="rangeText">250 metres</span> from the destination</div>
+   <div class="status"><strong>Destination</strong><span id="destText">Not selected yet</span></div>
+   <div class="actions"><button class="secondary" id="locate">Locate me</button><button class="danger" id="stop">Stop alarm</button></div>
+   <button class="primary full" id="test">Test alarm sound</button>
+   <p class="small">Tip: You can also tap anywhere on the map to set the destination.</p>
+   <p class="small">Keep this page open for reliable alerts. Mobile browsers may pause GPS updates or audio when the screen is locked or the tab is in the background.</p>
+  </section>
+  <section class="mapbox"><div id="map"></div><div class="maphint">Blue marker: your live location · Red marker: destination · Tap map to choose destination</div></section>
+ </main>
+</div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+let radius=250, watchId=null, map=null, userMarker=null, destinationMarker=null, accuracyCircle=null;
+let current=null, destination=null, alarmActive=false, audioCtx=null, lastAlert=0;
+function setStatus(title,detail){$('gpsStatus').innerHTML='<strong><span class="dot"></span>'+title+'</strong>'+detail;$('topStatus').textContent=title;}
+function distance(a,b){const R=6371000,rad=x=>x*Math.PI/180;const dLat=rad(b.lat-a.lat),dLon=rad(b.lng-a.lng);const x=Math.sin(dLat/2)**2+Math.cos(rad(a.lat))*Math.cos(rad(b.lat))*Math.sin(dLon/2)**2;return 2*R*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));}
+function beep(){
+ try{audioCtx=audioCtx||new (window.AudioContext||window.webkitAudioContext)();if(audioCtx.state==='suspended')audioCtx.resume();
+  [0,0.28,0.56].forEach((t,i)=>{const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type='sine';o.frequency.value=i%2?880:660;g.gain.setValueAtTime(0.0001,audioCtx.currentTime+t);g.gain.exponentialRampToValueAtTime(.22,audioCtx.currentTime+t+.02);g.gain.exponentialRampToValueAtTime(.0001,audioCtx.currentTime+t+.22);o.connect(g);g.connect(audioCtx.destination);o.start(audioCtx.currentTime+t);o.stop(audioCtx.currentTime+t+.24);});
+ }catch(e){alert('Audio could not start. Tap Test alarm sound once and check your phone volume.');}
+}
+function checkRange(){
+ if(!current||!destination)return;
+ const d=distance(current,destination);
+ if(d<=radius&&!alarmActive){alarmActive=true;setStatus('Destination range reached','You are about '+Math.round(d)+' m from your destination. Alarm activated.');beep();if(navigator.vibrate)navigator.vibrate([300,150,300,150,600]);}
+ else if(!alarmActive){setStatus('GPS tracking active','You are about '+Math.round(d)+' m from the destination. Alarm starts within '+radius+' m.');}
+}
+function initMap(){
+ map=L.map('map').setView([20,0],2);
+ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap contributors'}).addTo(map);
+ map.on('click',e=>setDestination({lat:e.latlng.lat,lng:e.latlng.lng},'Map pin'));
+}
+function setDestination(point,label){
+ destination=point;
+ if(destinationMarker)destinationMarker.setLatLng(point);else destinationMarker=L.marker(point).addTo(map);
+ destinationMarker.bindPopup('Destination: '+label).openPopup();
+ $('destText').textContent=label+' ('+point.lat.toFixed(5)+', '+point.lng.toFixed(5)+')';
+ $('results').innerHTML='';alarmActive=false;checkRange();
+ if(current)map.fitBounds(L.latLngBounds([current,point]).pad(.25));else map.setView(point,15);
+}
+function onPosition(pos){
+ current={lat:pos.coords.latitude,lng:pos.coords.longitude};
+ if(!userMarker){userMarker=L.circleMarker(current,{radius:9,color:'#fff',weight:3,fillColor:'#2864f0',fillOpacity:1}).addTo(map).bindPopup('Your current location');map.setView(current,15);}
+ else userMarker.setLatLng(current);
+ if(accuracyCircle)accuracyCircle.setLatLng(current).setRadius(pos.coords.accuracy);else accuracyCircle=L.circle(current,{radius:pos.coords.accuracy,color:'#3867f5',weight:1,fillOpacity:.07}).addTo(map);
+ setStatus('GPS tracking active','Location updated. Accuracy approximately '+Math.round(pos.coords.accuracy)+' m.');
+ checkRange();
+}
+function startGPS(){
+ if(!navigator.geolocation){setStatus('GPS unavailable','This browser does not support geolocation.');return;}
+ setStatus('Requesting location','Allow location access in the browser permission prompt.');
+ watchId=navigator.geolocation.watchPosition(onPosition,err=>{let msg=err.code===1?'Location permission was denied. Enable it in browser settings.':err.code===2?'Your location could not be determined. Try moving outdoors.':'Location request timed out. Try again.';setStatus('Location error',msg);},{enableHighAccuracy:true,maximumAge:2000,timeout:20000});
+}
+$('start').onclick=()=>{
+ const v=Number($('radius').value);if(!Number.isFinite(v)||v<25||v>5000){alert('Choose a range between 25 and 5000 metres.');return;}
+ radius=v;$('rangeText').textContent=radius+' metres';$('welcome').style.display='none';$('app').style.display='block';
+ initMap();startGPS();setTimeout(()=>map.invalidateSize(),150);
+};
+$('locate').onclick=()=>{if(current){map.setView(current,16);userMarker.openPopup();}else startGPS();};
+$('stop').onclick=()=>{alarmActive=false;setStatus(current?'GPS tracking active':'Waiting for location','Alarm is stopped. Tracking remains on.');};
+$('test').onclick=beep;
+$('search').onclick=searchPlace;
+$('destination').addEventListener('keydown',e=>{if(e.key==='Enter')searchPlace();});
+async function searchPlace(){
+ const q=$('destination').value.trim();if(!q)return;
+ $('results').innerHTML='<div class="small">Searching…</div>';
+ try{
+  const url='https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&q='+encodeURIComponent(q);
+  const res=await fetch(url,{headers:{'Accept-Language':'en'}});
+  if(!res.ok)throw new Error('Search service unavailable');
+  const data=await res.json();$('results').innerHTML='';
+  if(!data.length){$('results').innerHTML='<div class="small">No results found. Try a more specific place name or tap the map.</div>';return;}
+  data.forEach(item=>{const el=document.createElement('div');el.className='result';el.textContent=item.display_name;el.onclick=()=>setDestination({lat:Number(item.lat),lng:Number(item.lon)},item.display_name);$('results').appendChild(el);});
+ }catch(e){$('results').innerHTML='<div class="small">Could not search right now. Check your internet connection or tap the map to set a pin.</div>';}
+}
+window.addEventListener('beforeunload',()=>{if(watchId!==null)navigator.geolocation.clearWatch(watchId);});
+</script>
+</body>
+</html>
